@@ -82,10 +82,10 @@ quitte uniquement leur affichage.
 
 Accès locaux :
 
-- API vivante : `http://localhost:3000/api/v1/health/live`
-- API prête : `http://localhost:3000/api/v1/health/ready`
-- Swagger : `http://localhost:3000/docs`
-- Images publiques : `http://localhost:3000/media/<filename>`
+- API vivante : `http://localhost:6000/api/v1/health/live`
+- API prête : `http://localhost:6000/api/v1/health/ready`
+- Swagger : `http://localhost:6000/docs`
+- Images publiques : `http://localhost:6000/media/<filename>`
 
 Arrêter les conteneurs sans effacer leurs volumes :
 
@@ -99,7 +99,7 @@ npm run docker:dev:down
 | ---------------------------- | --------------------------------------------------- | ----------------------------- |
 | `INTEGRATION_API_KEY`        | Secret reçu dans `X-API-Key`, 32 caractères minimum | clé locale à remplacer        |
 | `MEDIA_STORAGE_PATH`         | Répertoire privé des fichiers                       | `./uploads`                   |
-| `MEDIA_PUBLIC_BASE_URL`      | Base des URLs retournées                            | `http://localhost:3000/media` |
+| `MEDIA_PUBLIC_BASE_URL`      | Base des URLs retournées                            | `http://localhost:6000/media` |
 | `MEDIA_MAX_FILE_SIZE_BYTES`  | Taille binaire maximale                             | `5242880`                     |
 | `MEDIA_MAX_INPUT_PIXELS`     | Protection contre les images décompressées géantes  | `40000000`                    |
 | `MEDIA_UPLOAD_RATE_LIMIT`    | Uploads/minute par client réseau                    | `30`                          |
@@ -130,7 +130,7 @@ Champs :
 Exemple :
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/media \
+curl -X POST http://localhost:6000/api/v1/media \
   -H "X-API-Key: VOTRE_CLE" \
   -F "photo=@./photo.jpg;type=image/jpeg" \
   -F "name=Photo du culte"

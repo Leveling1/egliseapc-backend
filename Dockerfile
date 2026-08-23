@@ -6,7 +6,7 @@ RUN npm ci
 FROM dependencies AS development
 ENV NODE_ENV=development
 COPY . .
-EXPOSE 3000
+EXPOSE 6000
 CMD ["npm", "run", "dev"]
 
 FROM dependencies AS build
@@ -25,7 +25,7 @@ COPY --from=build --chown=api:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=api:nodejs /app/dist ./dist
 COPY --chown=api:nodejs database ./database
 USER api
-EXPOSE 3000
+EXPOSE 6000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/api/v1/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:6000/api/v1/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 CMD ["node", "dist/server.js"]

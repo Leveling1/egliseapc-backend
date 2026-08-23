@@ -11,7 +11,7 @@ const developmentApiKey = 'development-only-change-this-api-key';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
+  PORT: z.coerce.number().int().min(1).max(65_535).default(6000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
@@ -35,7 +35,7 @@ const envSchema = z.object({
   REDIS_PASSWORD: z.string().min(1).default('change-me'),
   INTEGRATION_API_KEY: z.string().min(32).default(developmentApiKey),
   MEDIA_STORAGE_PATH: z.string().min(1).default('./uploads'),
-  MEDIA_PUBLIC_BASE_URL: z.url().default('http://localhost:3000/media'),
+  MEDIA_PUBLIC_BASE_URL: z.url().default('http://localhost:6000/media'),
   MEDIA_MAX_FILE_SIZE_BYTES: z.coerce
     .number()
     .int()

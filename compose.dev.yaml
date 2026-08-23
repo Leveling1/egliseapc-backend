@@ -2,7 +2,7 @@ name: egliseapc-dev
 
 x-api-environment: &api-environment
   NODE_ENV: development
-  PORT: 3000
+  PORT: 6000
   DATABASE_HOST: postgres
   REDIS_HOST: redis
   REDIS_PORT: 6379
@@ -32,7 +32,7 @@ services:
     environment: *api-environment
     command: npm run dev
     ports:
-      - '127.0.0.1:${API_PORT:-3000}:3000'
+      - '127.0.0.1:${API_PORT:-6000}:6000'
     volumes:
       - .:/app
       - /app/node_modules
