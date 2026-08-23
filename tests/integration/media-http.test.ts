@@ -2,15 +2,15 @@ import sharp from 'sharp';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createApp } from '../src/app.js';
-import { env } from '../src/config/env.js';
-import { MediaService } from '../src/modules/media/media.service.js';
+import { createApp } from '../../src/app.js';
+import { env } from '../../src/config/env.js';
+import { MediaService } from '../../src/modules/media/media.service.js';
 import type {
   MediaRecord,
   MediaRepository,
   MediaStorage,
   PendingMedia,
-} from '../src/modules/media/media.types.js';
+} from '../../src/modules/media/media.types.js';
 
 class MemoryMediaRepository implements MediaRepository {
   public readonly records = new Map<string, MediaRecord>();

@@ -8,19 +8,30 @@ avant Multer afin qu’un appel non autorisé ne puisse pas consommer la mémoir
 
 ## Pipeline d’upload
 
-1. Clé d’intégration comparée en temps constant.
-2. Rate limiting global et limite dédiée à l’upload.
-3. Un fichier multipart nommé `photo`, deux champs texte au maximum.
-4. Taille maximale configurable, 5 Mio par défaut.
-5. MIME déclaré limité à `image/jpeg` et `image/png` comme filtre préliminaire.
-6. Détection du contenu réel avec `file-type`.
-7. Décodage Sharp avec limite de pixels, 40 millions par défaut.
-8. Rotation selon l’orientation puis réencodage JPEG ou PNG.
-9. Métadonnées retirées par la nouvelle sortie.
-10. SHA-256 calculé sur les octets normalisés.
-11. Nom normalisé, suffixe aléatoire et extension issue des magic bytes.
-12. Écriture atomique sans écrasement (`wx`) hors du répertoire source.
-13. Passage de la ligne PostgreSQL de `pending` à `ready` seulement après l’écriture.
+1. Vérification `X-API-Key` : refuse immédiatement tout appel qui ne connaît pas le secret technique
+   partagé avec Supabase.
+2. Rate limiting Redis : limite les uploads par fenêtre de temps, même si plusieurs instances de
+   l’API tournent derrière un reverse proxy.
+3. Limites Multer : accepte un seul champ fichier `photo`, une taille maximale stricte et très peu
+   de champs texte.
+4. Vérification du MIME déclaré : rejette tôt les fichiers annoncés comme SVG, PDF, ZIP ou autre.
+   Ce n’est qu’un filtre rapide, pas une preuve de sécurité.
+5. Magic bytes avec `file-type` : lit la signature réelle du fichier pour confirmer JPEG ou PNG.
+   Cette étape bloque les fichiers renommés en `.jpg`.
+6. Décodage Sharp : force libvips à comprendre réellement l’image et applique une limite de pixels
+   pour éviter les images décompressées géantes.
+7. Réencodage Sharp : génère un nouveau JPEG ou PNG propre à partir des pixels décodés.
+8. Suppression des métadonnées : les données EXIF/GPS/profil non nécessaires ne sont pas recopiées
+   dans la nouvelle sortie.
+9. Calcul SHA-256 : produit une empreinte stable du fichier normalisé, utilisée notamment comme
+   ETag public.
+10. Création d’un nom unique : normalise le nom lisible, ajoute 16 caractères aléatoires et reprend
+    l’extension depuis le type réellement détecté.
+11. Écriture dans le volume : écrit hors du code source et refuse l’écrasement si le nom existe déjà.
+12. Activation PostgreSQL : la ligne commence en `pending` puis passe à `ready` uniquement après
+    l’écriture réussie.
+13. Réponse `201` : retourne un JSON contenant l’URL publique complète construite depuis
+    `MEDIA_PUBLIC_BASE_URL`.
 
 ## Lecture publique
 
@@ -38,6 +49,10 @@ Aucune route HTTP `DELETE` n’existe. Une migration ajoute aussi un trigger Pos
 suppression de lignes `media_assets`. Les volumes et sauvegardes restent administrables par les
 opérateurs du serveur ; une immutabilité absolue exige un stockage objet WORM/Object Lock.
 
+Si le produit doit retirer une image de l’affichage, préférer une évolution de type archivage :
+Supabase autorise l’action, Express marque la ligne comme non publiée et la lecture publique retourne
+`404`. Cela évite d’ajouter une suppression physique directe.
+
 ## Limites et exploitation
 
 - Le stockage en mémoire Multer est borné à un fichier et à une taille stricte.
@@ -47,6 +62,20 @@ opérateurs du serveur ; une immutabilité absolue exige un stockage objet WORM/
 - Utiliser HTTPS, des secrets distincts par environnement et une rotation régulière.
 - Surveiller l’espace disque, le nombre d’uploads refusés et les lignes `failed`/`pending` anciennes.
 - Scanner les dépendances en CI et maintenir Sharp/libvips à jour.
+
+## Risques à surveiller
+
+| Risque                                 | Réponse actuelle                                                |
+| -------------------------------------- | --------------------------------------------------------------- |
+| Clé API volée                          | Rotation du secret, HTTPS obligatoire, ne jamais exposer au web |
+| Supabase contourné depuis Internet     | `X-API-Key`, pare-feu ou allowlist IP si possible               |
+| Fichier renommé en `.jpg`              | Magic bytes puis décodage Sharp                                 |
+| Image trop lourde après décompression  | `MEDIA_MAX_INPUT_PIXELS`                                        |
+| Remplissage disque                     | Taille maximale, rate limit, supervision du volume              |
+| Collision ou écrasement de fichier     | Suffixe aléatoire et écriture `wx`                              |
+| Path traversal                         | Nom public strict et résolution dans le dossier racine          |
+| Métadonnées GPS/EXIF                   | Réencodage sans copie des métadonnées                           |
+| Suppression non autorisée via HTTP/SQL | Aucune route `DELETE` et trigger PostgreSQL anti-delete         |
 
 ## Réponses attendues
 

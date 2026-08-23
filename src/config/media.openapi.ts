@@ -32,6 +32,28 @@ export const mediaPaths = {
                 },
               },
             },
+            encoding: {
+              photo: {
+                contentType: 'image/jpeg, image/png',
+              },
+            },
+            examples: {
+              uploadJpeg: {
+                summary: 'Upload JPEG via form-data',
+                value: {
+                  photo: '<fichier-binaire-jpeg>',
+                  name: 'Photo du culte',
+                  externalReference: 'supabase-user-or-operation-id',
+                },
+              },
+              uploadPng: {
+                summary: 'Upload PNG via form-data',
+                value: {
+                  photo: '<fichier-binaire-png>',
+                  name: 'Logo APC',
+                },
+              },
+            },
           },
         },
       },
@@ -39,7 +61,24 @@ export const mediaPaths = {
         '201': {
           description: 'Image validée, réencodée et conservée.',
           content: {
-            'application/json': { schema: { $ref: '#/components/schemas/MediaCreated' } },
+            'application/json': {
+              schema: { $ref: '#/components/schemas/MediaCreated' },
+              examples: {
+                uploadedImage: {
+                  summary: 'Réponse JSON retournée à Supabase',
+                  value: {
+                    id: '2dbdbe5b-df3b-4a91-84c8-9d1d1158b11d',
+                    filename: 'photo-du-culte-a1b2c3d4e5f60708.jpg',
+                    url: 'https://api.example.com/media/photo-du-culte-a1b2c3d4e5f60708.jpg',
+                    mimeType: 'image/jpeg',
+                    size: 241903,
+                    width: 1600,
+                    height: 900,
+                    createdAt: '2026-08-23T12:00:00.000Z',
+                  },
+                },
+              },
+            },
           },
         },
         '400': { $ref: '#/components/responses/BadRequest' },
@@ -82,6 +121,23 @@ export const mediaPaths = {
   },
 } as const;
 
+const problemContent = {
+  'application/problem+json': {
+    schema: { $ref: '#/components/schemas/Problem' },
+    examples: {
+      problem: {
+        value: {
+          type: 'about:blank',
+          title: 'Requête invalide',
+          status: 400,
+          detail: 'Le détail dépend du contrôle échoué.',
+          requestId: '2dbdbe5b-df3b-4a91-84c8-9d1d1158b11d',
+        },
+      },
+    },
+  },
+} as const;
+
 export const mediaSchemas = {
   MediaCreated: {
     type: 'object',
@@ -100,10 +156,16 @@ export const mediaSchemas = {
 } as const;
 
 export const mediaResponses = {
-  BadRequest: { description: 'Requête multipart ou champs invalides.' },
-  Unauthorized: { description: "Clé d'intégration absente ou invalide." },
-  PayloadTooLarge: { description: 'Image au-dessus de la taille maximale.' },
-  UnsupportedMediaType: { description: "Type déclaré ou contenu réel de l'image refusé." },
-  TooManyRequests: { description: "Limite d'upload atteinte." },
-  NotFound: { description: 'Image publique introuvable.' },
+  BadRequest: { description: 'Requête multipart ou champs invalides.', content: problemContent },
+  Unauthorized: { description: "Clé d'intégration absente ou invalide.", content: problemContent },
+  PayloadTooLarge: {
+    description: 'Image au-dessus de la taille maximale.',
+    content: problemContent,
+  },
+  UnsupportedMediaType: {
+    description: "Type déclaré ou contenu réel de l'image refusé.",
+    content: problemContent,
+  },
+  TooManyRequests: { description: "Limite d'upload atteinte.", content: problemContent },
+  NotFound: { description: 'Image publique introuvable.', content: problemContent },
 } as const;

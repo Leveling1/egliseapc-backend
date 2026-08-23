@@ -20,7 +20,7 @@ TypeScript est strict, en ESM NodeNext. Prettier impose les quotes simples, les 
 
 ## Testing Guidelines
 
-Les tests d'intégration HTTP résident dans `tests/` et utilisent Vitest avec Supertest. Ils doivent tester les statuts, le format de réponse et les contrôles de sécurité observables. Lancer `npm run test:coverage` pour produire le rapport local.
+Les tests unitaires résident dans `tests/unit`. Les tests d'intégration HTTP résident dans `tests/integration` et utilisent Vitest avec Supertest. Ils doivent tester les statuts, le format de réponse et les contrôles de sécurité observables. Lancer `npm run test:coverage` pour produire le rapport local.
 
 ## Security & API Contract
 

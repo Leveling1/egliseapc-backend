@@ -19,6 +19,8 @@
     "format:check": "prettier --check .",
     "check:lines": "node scripts/check-file-length.mjs",
     "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "db:migrate": "tsx src/infra/database/migrate.ts",

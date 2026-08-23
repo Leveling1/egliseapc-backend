@@ -155,7 +155,8 @@ un PNG sera publié en `.png`; un contenu non JPEG/PNG sera refusé.
 
 ## Intégration Supabase
 
-Le guide complet couvre la génération du secret, sa configuration, l’Edge Function, l’appel
+Le document court à transmettre au développeur Supabase est [docs/INTEGRATION.md](docs/INTEGRATION.md).
+Le guide plus détaillé couvre la génération du secret, sa configuration, l’Edge Function, l’appel
 frontend, les tests et la rotation : [docs/SUPABASE_INTEGRATION.md](docs/SUPABASE_INTEGRATION.md).
 
 Résumé des secrets :
@@ -192,17 +193,19 @@ remplacer la lecture publique par des URLs signées. Les garanties et limites so
 
 ## Commandes
 
-| Commande                  | Action                               |
-| ------------------------- | ------------------------------------ |
-| `npm run dev`             | API TypeScript en watch              |
-| `npm run build`           | compilation dans `dist/`             |
-| `npm start`               | exécution du build                   |
-| `npm test`                | tests Vitest/Supertest               |
-| `npm run check`           | types, lint, format, lignes et tests |
-| `npm run db:migrate`      | migrations SQL locales               |
-| `npm run docker:dev`      | build et démarrage Docker dev        |
-| `npm run docker:dev:logs` | suivi séparé des logs                |
-| `npm run docker:prod`     | build et démarrage production        |
+| Commande                   | Action                               |
+| -------------------------- | ------------------------------------ |
+| `npm run dev`              | API TypeScript en watch              |
+| `npm run build`            | compilation dans `dist/`             |
+| `npm start`                | exécution du build                   |
+| `npm test`                 | tests Vitest/Supertest               |
+| `npm run test:unit`        | tests unitaires ciblés               |
+| `npm run test:integration` | tests HTTP d’intégration             |
+| `npm run check`            | types, lint, format, lignes et tests |
+| `npm run db:migrate`       | migrations SQL locales               |
+| `npm run docker:dev`       | build et démarrage Docker dev        |
+| `npm run docker:dev:logs`  | suivi séparé des logs                |
+| `npm run docker:prod`      | build et démarrage production        |
 
 ## Production
 

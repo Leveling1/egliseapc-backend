@@ -68,6 +68,23 @@ if (
   );
 }
 
+const mediaPublicBaseUrl = new URL(parsedEnv.data.MEDIA_PUBLIC_BASE_URL);
+const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
+
+if (parsedEnv.data.NODE_ENV === 'production') {
+  if (mediaPublicBaseUrl.protocol !== 'https:') {
+    throw new Error(
+      'Configuration invalide : MEDIA_PUBLIC_BASE_URL doit utiliser HTTPS en production.',
+    );
+  }
+
+  if (localHosts.has(mediaPublicBaseUrl.hostname)) {
+    throw new Error(
+      'Configuration invalide : MEDIA_PUBLIC_BASE_URL ne doit pas pointer vers localhost en production.',
+    );
+  }
+}
+
 export const env = parsedEnv.data;
 export const allowedOrigins = env.CORS_ORIGINS.split(',')
   .map((origin) => origin.trim())
