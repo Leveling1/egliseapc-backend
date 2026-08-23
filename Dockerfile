@@ -19,6 +19,7 @@ FROM node:24-alpine AS production
 ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup -S nodejs && adduser -S api -G nodejs
+RUN mkdir -p /data/media && chown -R api:nodejs /data/media
 COPY --from=build --chown=api:nodejs /app/package.json ./package.json
 COPY --from=build --chown=api:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=api:nodejs /app/dist ./dist

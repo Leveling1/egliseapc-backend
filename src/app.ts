@@ -7,7 +7,10 @@ import swaggerUi from 'swagger-ui-express';
 
 import { allowedOrigins, env } from './config/env.js';
 import { openApiDocument } from './config/openapi.js';
-import { apiRouter } from './routes.js';
+import { mediaService as defaultMediaService } from './modules/media/media.dependencies.js';
+import { createPublicMediaRouter } from './modules/media/media.routes.js';
+import type { MediaService } from './modules/media/media.service.js';
+import { createApiRouter } from './routes.js';
 import { errorHandler, notFoundHandler } from './shared/http/error-handler.js';
 import { HttpError } from './shared/http/http-error.js';
 import { requestContext } from './shared/http/request-context.js';
@@ -21,13 +24,18 @@ const corsOptions: CorsOptions = {
     }
     callback(new HttpError(403, 'Origine interdite', "Cette origine n'est pas autorisée."));
   },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['authorization', 'content-type', 'x-request-id'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['authorization', 'content-type', 'x-request-id', 'x-api-key'],
   maxAge: 600,
 };
 
-export function createApp() {
+export interface AppDependencies {
+  mediaService?: MediaService;
+}
+
+export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
+  const mediaService = dependencies.mediaService ?? defaultMediaService;
 
   app.disable('x-powered-by');
   app.set('trust proxy', env.TRUST_PROXY);
@@ -41,7 +49,6 @@ export function createApp() {
     }),
   );
   app.use(helmet({ contentSecurityPolicy: false }));
-  app.use(cors(corsOptions));
   app.use(
     rateLimit({
       windowMs: 15 * 60 * 1000,
@@ -50,6 +57,18 @@ export function createApp() {
       legacyHeaders: false,
     }),
   );
+  app.use(
+    '/media',
+    cors({
+      origin: '*',
+      methods: ['GET', 'HEAD', 'OPTIONS'],
+      allowedHeaders: ['if-none-match'],
+      exposedHeaders: ['cache-control', 'content-type', 'etag'],
+      maxAge: 86_400,
+    }),
+    createPublicMediaRouter(mediaService),
+  );
+  app.use(cors(corsOptions));
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: false, limit: '100kb', parameterLimit: 100 }));
 
@@ -69,7 +88,7 @@ export function createApp() {
     );
   }
 
-  app.use('/api/v1', apiRouter);
+  app.use('/api/v1', createApiRouter(mediaService));
   app.use(notFoundHandler);
   app.use(errorHandler);
 

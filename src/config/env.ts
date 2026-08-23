@@ -7,6 +7,8 @@ const booleanFromString = z
   .default('true')
   .transform((value) => value === 'true');
 
+const developmentApiKey = 'development-only-change-this-api-key';
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
@@ -31,6 +33,23 @@ const envSchema = z.object({
   REDIS_HOST: z.string().min(1).optional(),
   REDIS_PORT: z.coerce.number().int().min(1).max(65_535).default(6379),
   REDIS_PASSWORD: z.string().min(1).default('change-me'),
+  INTEGRATION_API_KEY: z.string().min(32).default(developmentApiKey),
+  MEDIA_STORAGE_PATH: z.string().min(1).default('./uploads'),
+  MEDIA_PUBLIC_BASE_URL: z.url().default('http://localhost:3000/media'),
+  MEDIA_MAX_FILE_SIZE_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1_024)
+    .max(20 * 1_024 * 1_024)
+    .default(5 * 1_024 * 1_024),
+  MEDIA_MAX_INPUT_PIXELS: z.coerce
+    .number()
+    .int()
+    .min(1_000_000)
+    .max(100_000_000)
+    .default(40_000_000),
+  MEDIA_UPLOAD_RATE_LIMIT: z.coerce.number().int().min(1).max(1_000).default(30),
+  MEDIA_PUBLIC_CACHE_SECONDS: z.coerce.number().int().min(0).max(31_536_000).default(31_536_000),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -38,6 +57,15 @@ const parsedEnv = envSchema.safeParse(process.env);
 if (!parsedEnv.success) {
   const details = z.prettifyError(parsedEnv.error);
   throw new Error(`Configuration invalide :\n${details}`);
+}
+
+if (
+  parsedEnv.data.NODE_ENV === 'production' &&
+  parsedEnv.data.INTEGRATION_API_KEY === developmentApiKey
+) {
+  throw new Error(
+    'Configuration invalide : INTEGRATION_API_KEY doit être remplacée en production.',
+  );
 }
 
 export const env = parsedEnv.data;

@@ -16,7 +16,7 @@ services:
     command: npm run db:migrate
     volumes:
       - .:/app
-      - node-modules:/app/node_modules
+      - /app/node_modules
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,7 +35,7 @@ services:
       - '127.0.0.1:${API_PORT:-3000}:3000'
     volumes:
       - .:/app
-      - node-modules:/app/node_modules
+      - /app/node_modules
       - media-data:/data/media
     depends_on:
       migrate:
@@ -74,7 +74,6 @@ services:
     networks: [backend]
 
 volumes:
-  node-modules:
   postgres-data:
   redis-data:
   media-data:

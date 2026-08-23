@@ -1,6 +1,17 @@
-# Module Media (prochaine étape)
+# Module Media
 
-Ce module portera la validation binaire JPEG/PNG, le réencodage, le stockage privé et les
-métadonnées immuables. Il sera découpé en `media.routes.ts`, `media.controller.ts`,
-`media.service.ts`, `media.repository.ts` (SQL paramétré), `media.schema.ts` et un adaptateur de
-stockage. Aucune route `DELETE` ne sera créée.
+Ce module implémente le service externe appelé par Supabase.
+
+```text
+media.routes → media.controller → media.service
+                                  ├── image-processor
+                                  ├── media.repository → PostgreSQL
+                                  └── local-media-storage → volume privé
+```
+
+`POST /api/v1/media` est protégé par une clé d’intégration avant Multer. `GET /media/:filename` est
+public et ne retourne que les lignes `ready`. La validation combine limites multipart, MIME déclaré,
+magic bytes, décodage et réencodage Sharp. Aucune route `DELETE` n’existe.
+
+Le stockage et le repository sont derrière des interfaces de `media.types.ts`, ce qui permet de
+remplacer le volume local par un adaptateur S3-compatible sans modifier le contrôleur ni le service.

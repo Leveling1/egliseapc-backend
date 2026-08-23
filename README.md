@@ -1,291 +1,233 @@
-# Eglise APC — Media Backend API
+# Eglise APC — External Media API
 
-> Backend sécurisé d'upload et de conservation de photos JPEG/PNG.
-> Monolithe modulaire — Express 5 · TypeScript · PostgreSQL (SQL pur) · Redis · Docker
+> Service Express externe consommé par Supabase pour valider, réencoder, conserver et publier des
+> photos JPEG/PNG.
 
----
+Express 5 · TypeScript strict · PostgreSQL en SQL pur · Redis · Docker · OpenAPI
 
-## Table des matières
+## Principe
 
-1. [Présentation](#présentation)
-2. [Objectifs de sécurité](#objectifs-de-sécurité)
-3. [Stack technologique](#stack-technologique)
-4. [Architecture du projet](#architecture-du-projet)
-5. [Démarrage en développement](#démarrage-en-développement)
-6. [Environnement de production](#environnement-de-production)
-7. [Variables d'environnement](#variables-denvironnement)
-8. [SQL pur et migrations](#sql-pur-et-migrations)
-9. [API et Swagger](#api-et-swagger)
-10. [Commandes et tests](#commandes-et-tests)
-11. [Intégration continue](#intégration-continue)
-12. [Prochaines étapes](#prochaines-étapes)
-
----
-
-## Présentation
-
-Ce dépôt contient le socle backend du service média de l'Eglise APC. À terme, seuls des utilisateurs
-explicitement autorisés pourront envoyer des images, seuls les formats JPEG et PNG réellement
-valides seront conservés, et aucune capacité de suppression ne sera exposée par l'API.
-
-Cette livraison correspond à **l'initialisation** : infrastructure, architecture, sécurité HTTP,
-documentation, migrations SQL et qualité de code. Les routes métier d'authentification et d'upload
-ne sont pas encore implémentées afin de construire chaque étape avec son modèle de menace et ses
-tests.
-
-Le backend est organisé en **monolithe modulaire**. Il reste simple à déployer comme un seul service,
-mais chaque domaine isole ses routes, contrôleurs, services, validations et requêtes SQL.
-
-## Objectifs de sécurité
-
-Le futur flux média devra appliquer tous les contrôles suivants :
-
-1. authentification obligatoire et autorisation par rôle avant la lecture du multipart ;
-2. limites strictes sur le nombre de fichiers, la taille individuelle et la requête totale ;
-3. détection par signature binaire (« magic bytes »), sans confiance dans le nom ou le MIME client ;
-4. décodage et réencodage pour neutraliser les contenus parasites et retirer les métadonnées ;
-5. noms générés côté serveur, hash SHA-256 et stockage hors de tout répertoire statique public ;
-6. métadonnées d'audit en PostgreSQL et rate limiting distribué avec Redis ;
-7. aucune route HTTP `DELETE` et stockage configuré pour l'immutabilité/rétention.
-
-> **Portée de “personne ne peut supprimer”** — l'API ne possédera aucune fonction de suppression.
-> Un administrateur ayant accès au serveur ou au volume garde techniquement le contrôle du stockage.
-> Une garantie réglementaire absolue demandera un stockage objet WORM avec verrouillage de rétention.
-
-## Stack technologique
-
-| Couche          | Technologie                      | Rôle                                                   |
-| --------------- | -------------------------------- | ------------------------------------------------------ |
-| Runtime         | Node.js 24                       | Runtime LTS utilisé localement et dans Docker          |
-| API             | Express 5 + TypeScript strict    | HTTP, middlewares et routage versionné                 |
-| Validation      | Zod                              | Validation de l'environnement puis des futurs payloads |
-| Base de données | PostgreSQL 17 + `pg`             | SQL pur, métadonnées et audit                          |
-| Cache           | Redis 8 + `node-redis`           | Rate limits, sessions et données temporaires           |
-| Contrat API     | OpenAPI 3.1 + Swagger UI         | Documentation interactive                              |
-| Logs            | Pino + pino-http                 | Logs structurés et secrets masqués                     |
-| Sécurité HTTP   | Helmet, CORS, express-rate-limit | En-têtes, origines et limitation de débit              |
-| Tests           | Vitest + Supertest               | Tests unitaires et intégration HTTP                    |
-| Qualité         | ESLint + Prettier                | Règles strictes et format uniforme                     |
-| Exécution       | Docker + Docker Compose          | Environnements reproductibles                          |
-
-Aucun ORM ni query builder n'est utilisé.
-
-## Architecture du projet
+Supabase reste responsable des utilisateurs, sessions, rôles et autorisations. Après avoir autorisé
+une action, une Edge Function appelle cette API avec une clé technique privée.
 
 ```text
-egliseapc-backend/
-├── src/
-│   ├── modules/
-│   │   ├── auth/                       # Prochaine étape : identité et rôles
-│   │   │   └── README.md
-│   │   ├── media/                      # Prochaine étape : upload et stockage
-│   │   │   └── README.md
-│   │   └── health/                     # Liveness et readiness
-│   │       ├── health.routes.ts
-│   │       ├── health.controller.ts
-│   │       └── health.service.ts
-│   ├── infra/
-│   │   ├── cache/redis.ts              # Client Redis partagé
-│   │   ├── database/postgres.ts        # Pool PostgreSQL partagé
-│   │   ├── database/migrate.ts         # Runner de migrations SQL
-│   │   └── lifecycle.ts                # Connexions et arrêt gracieux
-│   ├── shared/
-│   │   ├── http/                       # Contexte requête et erreurs RFC 9457
-│   │   └── logger.ts                   # Logs structurés et redaction
-│   ├── config/                         # Environnement et OpenAPI
-│   ├── app.ts                          # Composition Express testable
-│   ├── routes.ts                       # Agrégation sous /api/v1
-│   └── server.ts                       # Bootstrap réseau
-├── database/
-│   ├── migrations/                     # SQL versionné, immuable après application
-│   └── seeds/                          # Futures données locales non sensibles
-├── tests/                              # Tests HTTP et futurs tests par module
-├── compose.dev.yaml                    # Développement : hot reload et ports locaux
-├── compose.prod.yaml                   # Production : réseau privé et migration préalable
-├── Dockerfile                          # Targets development/build/production
-├── agent.mmd                           # Diagramme Mermaid de l'architecture
-└── AGENTS.md                           # Règles de contribution pour les agents
+Client → Supabase Auth/roles → Edge Function → API média → PostgreSQL + volume
+                                                ↓
+                              URL publique /media/nom-unique.jpg
 ```
 
-Chaque module métier suivra ce flux :
+Cette API ne contient aucune authentification utilisateur et ne requiert aucune clé Supabase. Elle
+authentifie uniquement le service appelant avec `X-API-Key`.
+
+## Fonctionnalités
+
+- `POST /api/v1/media` réservé au client technique Supabase ;
+- un seul fichier `photo` JPEG ou PNG par requête ;
+- limites de taille, parties multipart, champs et pixels ;
+- vérification du MIME déclaré puis des magic bytes avec `file-type` ;
+- décodage et réencodage avec Sharp ;
+- retrait des métadonnées et calcul SHA-256 ;
+- nom lisible normalisé avec suffixe aléatoire ;
+- stockage persistant hors du code source ;
+- métadonnées immuables dans PostgreSQL ;
+- `GET /media/:filename` public, avec ETag et cache immuable ;
+- rate limiting Redis pour l’upload ;
+- aucune route de suppression.
+
+## Architecture
 
 ```text
-route → controller → service → repository SQL / adaptateur externe
+src/
+├── app.ts                         # Composition HTTP sans écoute réseau
+├── server.ts                      # Démarrage et arrêt gracieux
+├── config/
+│   ├── env.ts                     # Validation Zod de l’environnement
+│   ├── openapi.ts                 # Contrat OpenAPI principal
+│   └── media.openapi.ts           # Contrat du domaine média
+├── modules/
+│   ├── health/
+│   └── media/
+│       ├── media.routes.ts        # Middlewares et endpoints
+│       ├── media.controller.ts    # Adaptation HTTP
+│       ├── media.service.ts       # Orchestration métier
+│       ├── media.repository.ts    # SQL paramétré
+│       ├── image-processor.ts     # Magic bytes + Sharp
+│       ├── media-upload.middleware.ts
+│       └── local-media-storage.ts
+├── infra/                         # PostgreSQL, Redis, cycle de vie
+└── shared/                        # Erreurs, logs, clé d’intégration
 ```
 
-- la route compose les middlewares ;
-- le contrôleur traduit HTTP, sans logique métier ;
-- le service porte les invariants métier, sans dépendre d'Express ;
-- le repository exécute exclusivement des requêtes SQL paramétrées ;
-- le schema Zod valide les données à la frontière.
+Le flux respecte `route → controller → service → repository/adaptateur`. Aucun fichier ne doit
+dépasser 300 lignes et aucun ORM n’est utilisé. Voir [agent.mmd](agent.mmd).
 
-Voir [agent.mmd](agent.mmd) pour le diagramme et les frontières architecturales.
+## Démarrage Docker
 
-## Démarrage en développement
-
-### Option A — pile Docker complète
+Créer le fichier local :
 
 ```powershell
 Copy-Item .env.example .env
-# Modifier les mots de passe dans .env
+```
+
+Modifier au minimum les mots de passe et `INTEGRATION_API_KEY`, puis démarrer :
+
+```bash
 npm run docker:dev
 npm run docker:dev:logs
 ```
 
-`compose.dev.yaml` lit `.env`, monte le code pour le hot reload et expose seulement sur
-`127.0.0.1` : API `3000`, PostgreSQL `5432`, Redis `6379`.
+`docker:dev` exécute `docker compose up -d --build`. La commande de logs est séparée ; `Ctrl+C`
+quitte uniquement leur affichage.
 
-`docker:dev` construit les images puis démarre les conteneurs en arrière-plan. `docker:dev:logs`
-suit les journaux ; `Ctrl+C` quitte seulement leur affichage, sans arrêter les conteneurs. Pour
-l'API seule, utiliser `npm run docker:dev:logs:api`. `npm run docker:dev:ps` affiche aussi les
-services arrêtés.
+Accès locaux :
 
-### Option B — API locale, dépendances dans Docker
+- API vivante : `http://localhost:3000/api/v1/health/live`
+- API prête : `http://localhost:3000/api/v1/health/ready`
+- Swagger : `http://localhost:3000/docs`
+- Images publiques : `http://localhost:3000/media/<filename>`
 
-```bash
-docker compose -f compose.dev.yaml up -d postgres redis
-npm install
-npm run db:migrate
-npm run dev
-```
-
-Accès utiles :
-
-- API : `http://localhost:3000/api/v1/health/live`
-- readiness : `http://localhost:3000/api/v1/health/ready`
-- Swagger UI : `http://localhost:3000/docs`
-
-Pour arrêter sans effacer les volumes :
+Arrêter les conteneurs sans effacer leurs volumes :
 
 ```bash
 npm run docker:dev:down
 ```
 
-## Environnement de production
+## Variables d’environnement
 
-Le serveur possède son propre fichier `.env`, au même emplacement et avec les mêmes clés que le
-poste local, mais avec des secrets et réglages de production différents. Ce fichier n'est jamais
-commité ni copié depuis le dépôt.
+| Variable                     | Rôle                                                | Défaut local                  |
+| ---------------------------- | --------------------------------------------------- | ----------------------------- |
+| `INTEGRATION_API_KEY`        | Secret reçu dans `X-API-Key`, 32 caractères minimum | clé locale à remplacer        |
+| `MEDIA_STORAGE_PATH`         | Répertoire privé des fichiers                       | `./uploads`                   |
+| `MEDIA_PUBLIC_BASE_URL`      | Base des URLs retournées                            | `http://localhost:3000/media` |
+| `MEDIA_MAX_FILE_SIZE_BYTES`  | Taille binaire maximale                             | `5242880`                     |
+| `MEDIA_MAX_INPUT_PIXELS`     | Protection contre les images décompressées géantes  | `40000000`                    |
+| `MEDIA_UPLOAD_RATE_LIMIT`    | Uploads/minute par client réseau                    | `30`                          |
+| `MEDIA_PUBLIC_CACHE_SECONDS` | Cache des images immuables                          | `31536000`                    |
+| `DATABASE_URL`               | Connexion PostgreSQL hors Docker                    | voir `.env.example`           |
+| `REDIS_URL`                  | Connexion Redis hors Docker                         | voir `.env.example`           |
+| `CORS_ORIGINS`               | Origines navigateur autorisées                      | frontend local                |
+| `SWAGGER_ENABLED`            | Active `/docs`                                      | `true`                        |
 
-```bash
-# Sur le serveur, après création sécurisée de .env
-npm run docker:prod
-npm run docker:prod:logs
+La clé locale par défaut est interdite automatiquement lorsque `NODE_ENV=production`.
+
+## Contrat d’upload
+
+```http
+POST /api/v1/media
+X-API-Key: <secret-service>
+Content-Type: multipart/form-data
 ```
 
-`compose.prod.yaml` :
+Champs :
 
-- ne publie ni PostgreSQL ni Redis sur l'hôte ;
-- place les services sur un réseau Docker interne ;
-- exécute les migrations SQL dans un conteneur éphémère avant l'API ;
-- lance l'API avec un utilisateur Linux non-root ;
-- conserve PostgreSQL, Redis et les futurs médias dans des volumes dédiés ;
-- redémarre les services persistants et vérifie leur santé.
+| Champ               | Requis | Description                                       |
+| ------------------- | ------ | ------------------------------------------------- |
+| `photo`             | oui    | fichier JPEG ou PNG                               |
+| `name`              | non    | nom public lisible, normalisé par le serveur      |
+| `externalReference` | non    | référence Supabase opaque, 128 caractères maximum |
 
-Les commandes `docker:prod:logs:api` et `docker:prod:ps` ciblent respectivement les logs de l'API
-et l'état de tous les conteneurs.
+Exemple :
 
-L'API écoute par défaut sur `127.0.0.1:3000`, prête à être placée derrière un reverse proxy TLS.
-Définir `TRUST_PROXY=1` uniquement s'il existe exactement un proxy de confiance. Mettre
-`SWAGGER_ENABLED=false` si la documentation ne doit pas être publique.
+```bash
+curl -X POST http://localhost:3000/api/v1/media \
+  -H "X-API-Key: VOTRE_CLE" \
+  -F "photo=@./photo.jpg;type=image/jpeg" \
+  -F "name=Photo du culte"
+```
 
-## Variables d'environnement
+Réponse `201` :
 
-| Variable             | Développement         | Production                      |
-| -------------------- | --------------------- | ------------------------------- |
-| `NODE_ENV`           | `development`         | `production`                    |
-| `PORT`               | `3000`                | `3000` dans le conteneur        |
-| `API_BIND_ADDRESS`   | `127.0.0.1`           | `127.0.0.1` derrière proxy      |
-| `API_PORT`           | `3000`                | Port choisi sur le serveur      |
-| `LOG_LEVEL`          | `debug` ou `info`     | `info`                          |
-| `TRUST_PROXY`        | `0`                   | Nombre exact de proxies         |
-| `CORS_ORIGINS`       | URL du frontend local | Origine HTTPS réelle            |
-| `SWAGGER_ENABLED`    | `true`                | Selon la politique d'accès      |
-| `DATABASE_URL`       | URL locale            | Injectée vers le service Docker |
-| `REDIS_URL`          | URL locale            | Injectée vers le service Docker |
-| `MEDIA_STORAGE_PATH` | `./uploads`           | `/data/media`                   |
-| `POSTGRES_*`         | Identifiants locaux   | Secrets forts et uniques        |
-| `REDIS_PASSWORD`     | Secret local          | Secret fort et unique           |
+```json
+{
+  "id": "2dbdbe5b-df3b-4a91-84c8-9d1d1158b11d",
+  "filename": "photo-du-culte-a1b2c3d4e5f60708.jpg",
+  "url": "https://api.example.com/media/photo-du-culte-a1b2c3d4e5f60708.jpg",
+  "mimeType": "image/jpeg",
+  "size": 241903,
+  "width": 1600,
+  "height": 900,
+  "createdAt": "2026-08-23T12:00:00.000Z"
+}
+```
 
-Les URL contenant des caractères spéciaux doivent être encodées. La configuration applicative est
-validée par Zod et bloque le démarrage en cas d'erreur. `.env.example` est le seul fichier modèle ;
-`.env` est ignoré par Git.
+L’extension est toujours reconstruite depuis le contenu détecté. Un fichier nommé `.jpg` contenant
+un PNG sera publié en `.png`; un contenu non JPEG/PNG sera refusé.
 
-## SQL pur et migrations
+## Intégration Supabase
 
-Créer une migration sous la forme `database/migrations/NNN_description.sql`, puis lancer :
+Le guide complet couvre la génération du secret, sa configuration, l’Edge Function, l’appel
+frontend, les tests et la rotation : [docs/SUPABASE_INTEGRATION.md](docs/SUPABASE_INTEGRATION.md).
+
+Résumé des secrets :
+
+```text
+Supabase : MEDIA_API_URL + MEDIA_API_KEY
+Express  : INTEGRATION_API_KEY (même valeur que MEDIA_API_KEY)
+```
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` ne sont pas nécessaires dans ce
+service, puisqu’il n’appelle pas Supabase.
+
+## Persistance SQL
+
+Les migrations sont dans `database/migrations` :
 
 ```bash
 npm run db:migrate
 ```
 
-Le runner :
+`media_assets` conserve le nom public, le chemin interne, le type détecté, les dimensions, la taille,
+le hash, la référence externe, le statut et la date. Une ligne commence en `pending` puis devient
+`ready` seulement après écriture réussie. Un trigger interdit les `DELETE` SQL sur cette table.
 
-- trie les fichiers par numéro ;
-- protège l'exécution concurrente avec un advisory lock PostgreSQL ;
-- exécute chaque fichier dans une transaction ;
-- enregistre son SHA-256 dans `schema_migrations` ;
-- refuse une migration déjà appliquée dont le contenu a changé.
+## Sécurité
 
-Toutes les valeurs externes dans les repositories devront passer par `$1`, `$2`, etc. Une
-transaction métier devra utiliser un même client obtenu par `pool.connect()`.
+La clé API est comparée en temps constant avant la lecture multipart et masquée dans les logs. Le
+stockage refuse les chemins non conformes et les écrasements. Les images publiques sont immuables ;
+le même nom humain reçoit toujours un suffixe unique.
 
-## API et Swagger
+Une URL publique est visible par toute personne qui la connaît. Pour des images privées, il faudra
+remplacer la lecture publique par des URLs signées. Les garanties et limites sont détaillées dans
+[docs/MEDIA_SECURITY.md](docs/MEDIA_SECURITY.md).
 
-Endpoints actuellement disponibles :
+## Commandes
 
-| Méthode | Endpoint               | Description               | Statut attendu |
-| ------- | ---------------------- | ------------------------- | -------------- |
-| `GET`   | `/api/v1/health/live`  | Processus HTTP vivant     | `200`          |
-| `GET`   | `/api/v1/health/ready` | PostgreSQL et Redis prêts | `200` ou `503` |
-| `GET`   | `/docs`                | Swagger UI, si activé     | `200`          |
+| Commande                  | Action                               |
+| ------------------------- | ------------------------------------ |
+| `npm run dev`             | API TypeScript en watch              |
+| `npm run build`           | compilation dans `dist/`             |
+| `npm start`               | exécution du build                   |
+| `npm test`                | tests Vitest/Supertest               |
+| `npm run check`           | types, lint, format, lignes et tests |
+| `npm run db:migrate`      | migrations SQL locales               |
+| `npm run docker:dev`      | build et démarrage Docker dev        |
+| `npm run docker:dev:logs` | suivi séparé des logs                |
+| `npm run docker:prod`     | build et démarrage production        |
 
-Chaque futur endpoint devra être ajouté à OpenAPI dans le même changement que son code et ses
-tests. Les erreurs HTTP utilisent `application/problem+json` et incluent un `requestId`.
+## Production
 
-## Commandes et tests
+Le serveur utilise un `.env` du même nom que localement, avec des valeurs différentes et jamais
+commitées. Configurer au minimum :
 
-| Commande                | Rôle                                        |
-| ----------------------- | ------------------------------------------- |
-| `npm run dev`           | Démarrer avec hot reload                    |
-| `npm run build`         | Compiler dans `dist/`                       |
-| `npm start`             | Exécuter le build                           |
-| `npm test`              | Lancer Vitest                               |
-| `npm run test:coverage` | Générer la couverture                       |
-| `npm run lint`          | Lancer ESLint strict                        |
-| `npm run format`        | Appliquer Prettier                          |
-| `npm run check:lines`   | Refuser tout fichier supérieur à 300 lignes |
-| `npm run check`         | Types, lint, format, taille et tests        |
-
-Un test ciblé se lance avec :
-
-```bash
-npx vitest run tests/health.test.ts
+```env
+NODE_ENV=production
+INTEGRATION_API_KEY=<secret-unique>
+MEDIA_PUBLIC_BASE_URL=https://api.example.com/media
+API_BIND_ADDRESS=127.0.0.1
+TRUST_PROXY=1
 ```
 
-## Intégration continue
+Placer l’API derrière un reverse proxy HTTPS. PostgreSQL et Redis ne sont pas publiés par le Compose
+de production. L’utilisateur du conteneur est non-root et le volume `media-data` persiste les images.
 
-Le workflow GitHub Actions `.github/workflows/ci.yml` s'exécute sur les pull requests et les pushes
-vers `main`. Il installe avec `npm ci`, lance toutes les vérifications, compile TypeScript, valide les
-deux fichiers Compose et construit l'image de production. Aucune étape de déploiement continu n'est
-ajoutée tant que le serveur cible n'est pas choisi.
+```bash
+npm run docker:prod
+npm run docker:prod:logs
+```
 
-## Prochaines étapes
+## Qualité et CI
 
-1. définir le mode d'authentification et le modèle de rôles des téléverseurs ;
-2. créer le schéma SQL `users/principals`, les migrations et le module `auth` ;
-3. choisir la limite de taille, le nombre d'images et la politique de rétention ;
-4. implémenter le module `media` avec validation binaire et réencodage ;
-5. ajouter tests d'attaque, audit et documentation Swagger exhaustive.
-
-## Références de sécurité
-
-- [Bonnes pratiques de sécurité Express](https://expressjs.com/en/advanced/best-practice-security/)
-- [Sécurité et limites Multer](https://expressjs.com/en/resources/middleware/multer/)
-- [Pool node-postgres](https://node-postgres.com/features/pooling)
-- [Client Node.js officiel Redis](https://redis.io/docs/latest/develop/clients/nodejs/connect/)
-
----
-
-Avant toute contribution, lire [AGENTS.md](AGENTS.md). L'architecture privilégie des fichiers courts,
-une responsabilité par composant et une limite automatisée de **300 lignes par fichier**.
+La CI lance `npm ci`, l’audit des dépendances de production, toutes les vérifications, le build
+TypeScript, la validation des deux fichiers Compose et le build de l’image de production. Les tests
+couvrent la clé absente, JPEG/PNG réels, MIME falsifié, format interdit, dépassement de taille, nom
+hostile, lecture publique et absence de suppression.

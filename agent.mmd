@@ -1,29 +1,24 @@
 flowchart TB
-  Client[Client authentifié] -->|HTTPS| HTTP[Couche HTTP Express]
-  HTTP --> Guards[Helmet · CORS · rate limit · validation]
+  Client[Client authentifié] -->|JWT| Supabase[Supabase Auth + autorisation]
+  Supabase -->|Edge Function + X-API-Key| HTTP[Express Media API]
+  HTTP --> Guards[Helmet · clé technique · rate limit · limites multipart]
   Guards --> Router[Routeur versionné /api/v1]
 
   subgraph Monolith[Monolithe modulaire]
     Router --> Health[Module Health]
-    Router -. prochaine étape .-> Auth[Module Auth]
-    Router -. prochaine étape .-> Media[Module Media]
-
-    Auth --> AuthController[Controller]
-    AuthController --> AuthService[Service métier]
-    AuthService --> AuthRepository[Repository SQL]
-
-    Media --> MediaController[Controller]
-    MediaController --> MediaService[Service métier]
-    MediaService --> MediaRepository[Repository SQL]
-    MediaService --> StorageAdapter[Adaptateur stockage privé]
+    Router --> MediaRoute[POST /media]
+    MediaRoute --> Controller[Media Controller]
+    Controller --> Service[Media Service]
+    Service --> Processor[file-type + Sharp]
+    Service --> Repository[Repository SQL]
+    Service --> Storage[Port de stockage]
   end
 
-  AuthRepository --> PG[(PostgreSQL)]
-  MediaRepository --> PG
-  AuthService --> Redis[(Redis)]
-  Health --> PG
-  Health --> Redis
-  StorageAdapter --> Volume[(Volume média / objet immuable)]
+  Repository --> PG[(PostgreSQL)]
+  Storage --> Volume[(Volume média privé)]
+  Guards --> Redis[(Redis rate limit)]
 
-  MediaService --- Policy[JPEG/PNG · magic bytes · réencodage · aucun DELETE]
+  Public[GET /media/nom-unique.ext] --> Controller
+  Controller -->|JPEG/PNG public immuable| Public
 
+  Service --- Policy[JPEG/PNG · magic bytes · réencodage · aucune route DELETE]

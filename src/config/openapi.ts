@@ -1,14 +1,20 @@
+import { mediaPaths, mediaResponses, mediaSchemas } from './media.openapi.js';
+
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'Eglise APC Media API',
-    version: '0.1.0',
-    description: 'API sécurisée de stockage et de consultation de médias.',
+    version: '1.0.0',
+    description:
+      'Service média externe consommé par Supabase. Les écritures exigent une clé d’intégration.',
   },
-  servers: [{ url: '/api/v1', description: 'Version 1' }],
-  tags: [{ name: 'Health', description: "État de santé de l'application" }],
+  servers: [{ url: '/', description: 'Serveur courant' }],
+  tags: [
+    { name: 'Health', description: "État de santé de l'application" },
+    { name: 'Media', description: 'Upload privé et consultation publique des images' },
+  ],
   paths: {
-    '/health/live': {
+    '/api/v1/health/live': {
       get: {
         tags: ['Health'],
         summary: "Vérifie que le processus de l'API répond",
@@ -25,10 +31,10 @@ export const openApiDocument = {
         },
       },
     },
-    '/health/ready': {
+    '/api/v1/health/ready': {
       get: {
         tags: ['Health'],
-        summary: 'Vérifie les connexions PostgreSQL et Redis',
+        summary: 'Vérifie PostgreSQL, Redis et le stockage média',
         operationId: 'getReadiness',
         responses: {
           '200': { description: 'Toutes les dépendances sont prêtes.' },
@@ -36,8 +42,17 @@ export const openApiDocument = {
         },
       },
     },
+    ...mediaPaths,
   },
   components: {
+    securitySchemes: {
+      IntegrationApiKey: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+        description: 'Secret serveur-à-serveur configuré dans Supabase et dans cette API.',
+      },
+    },
     schemas: {
       Liveness: {
         type: 'object',
@@ -58,6 +73,8 @@ export const openApiDocument = {
           requestId: { type: 'string', format: 'uuid' },
         },
       },
+      ...mediaSchemas,
     },
+    responses: mediaResponses,
   },
 } as const;

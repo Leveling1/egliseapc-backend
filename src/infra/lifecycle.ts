@@ -2,11 +2,12 @@ import type { Server } from 'node:http';
 
 import { closeRedis, connectRedis } from './cache/redis.js';
 import { checkPostgres, closePostgres } from './database/postgres.js';
+import { localMediaStorage } from '../modules/media/media.dependencies.js';
 import { logger } from '../shared/logger.js';
 
 export async function connectInfrastructure(): Promise<void> {
-  await Promise.all([checkPostgres(), connectRedis()]);
-  logger.info('Connexions PostgreSQL et Redis établies');
+  await Promise.all([checkPostgres(), connectRedis(), localMediaStorage.ensureReady()]);
+  logger.info('PostgreSQL, Redis et stockage média prêts');
 }
 
 export function registerGracefulShutdown(server: Server): void {
