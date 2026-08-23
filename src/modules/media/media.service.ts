@@ -19,6 +19,11 @@ export interface PublicMedia {
   data: Buffer;
 }
 
+export interface DeleteMediaInput {
+  deletedReference?: string;
+  reason?: string;
+}
+
 export class MediaService {
   public constructor(
     private readonly repository: MediaRepository,
@@ -72,6 +77,27 @@ export class MediaService {
     if (!record) throw new HttpError(404, 'Image introuvable', "Cette image n'existe pas.");
 
     return { record, data: await this.storage.read(record.storageKey) };
+  }
+
+  public async deleteMedia(id: string, input: DeleteMediaInput = {}): Promise<MediaRecord> {
+    const record = await this.repository.findReadyById(id);
+    if (!record) throw new HttpError(404, 'Image introuvable', "Cette image n'existe pas.");
+
+    const deleted = await this.repository.markDeleted(id, {
+      ...(input.deletedReference ? { deletedReference: input.deletedReference } : {}),
+      ...(input.reason ? { deletionReason: input.reason } : {}),
+    });
+
+    try {
+      await this.storage.remove(record.storageKey);
+    } catch (error) {
+      logger.warn(
+        { err: error, mediaId: id },
+        "Le média a été dépublié, mais le fichier n'a pas pu être retiré du volume",
+      );
+    }
+
+    return deleted;
   }
 
   public buildPublicUrl(publicFilename: string): string {

@@ -3,7 +3,11 @@ import { z } from 'zod';
 
 import { env } from '../../config/env.js';
 import { HttpError } from '../../shared/http/http-error.js';
-import { mediaUploadFieldsSchema } from './media.schema.js';
+import {
+  mediaDeleteBodySchema,
+  mediaIdParamSchema,
+  mediaUploadFieldsSchema,
+} from './media.schema.js';
 import type { MediaService } from './media.service.js';
 
 export function createUploadMediaHandler(service: MediaService): RequestHandler {
@@ -62,5 +66,33 @@ export function createGetPublicMediaHandler(service: MediaService): RequestHandl
     }
 
     response.status(200).type(record.mimeType).send(data);
+  };
+}
+
+export function createDeleteMediaHandler(service: MediaService): RequestHandler {
+  return async (request, response) => {
+    const parsedId = mediaIdParamSchema.safeParse(request.params.id);
+    if (!parsedId.success) {
+      throw new HttpError(404, 'Image introuvable', "Cette image n'existe pas.");
+    }
+
+    const parsedBody = mediaDeleteBodySchema.safeParse(request.body);
+    if (!parsedBody.success) {
+      throw new HttpError(400, 'Corps JSON invalide', z.prettifyError(parsedBody.error));
+    }
+
+    const record = await service.deleteMedia(parsedId.data, {
+      ...(parsedBody.data.deletedReference
+        ? { deletedReference: parsedBody.data.deletedReference }
+        : {}),
+      ...(parsedBody.data.reason ? { reason: parsedBody.data.reason } : {}),
+    });
+
+    response.status(200).json({
+      id: record.id,
+      filename: record.publicFilename,
+      status: record.status,
+      deletedAt: record.deletedAt?.toISOString() ?? null,
+    });
   };
 }

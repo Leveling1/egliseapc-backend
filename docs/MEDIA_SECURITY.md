@@ -45,13 +45,16 @@ les médias deviennent privés, remplacer cette route par des URL signées à du
 
 ## Suppression
 
-Aucune route HTTP `DELETE` n’existe. Une migration ajoute aussi un trigger PostgreSQL qui refuse les
-suppression de lignes `media_assets`. Les volumes et sauvegardes restent administrables par les
-opérateurs du serveur ; une immutabilité absolue exige un stockage objet WORM/Object Lock.
+`DELETE /api/v1/media/:id` est une écriture privée réservée à Supabase avec `X-API-Key`. Supabase
+doit vérifier l’utilisateur et le rôle avant d’appeler cette route.
 
-Si le produit doit retirer une image de l’affichage, préférer une évolution de type archivage :
-Supabase autorise l’action, Express marque la ligne comme non publiée et la lecture publique retourne
-`404`. Cela évite d’ajouter une suppression physique directe.
+La suppression côté API est une transition `ready` vers `deleted`. La ligne PostgreSQL reste
+présente pour l’audit, avec `deleted_at`, `deleted_reference` et `deletion_reason` si fournis. Le
+fichier est retiré du volume local si possible, et `GET /media/:filename` retourne ensuite `404`.
+
+Une migration conserve le trigger PostgreSQL qui refuse les suppressions physiques de lignes
+`media_assets`. Les volumes et sauvegardes restent administrables par les opérateurs du serveur ; une
+immutabilité absolue exige un stockage objet WORM/Object Lock.
 
 ## Limites et exploitation
 
@@ -65,17 +68,18 @@ Supabase autorise l’action, Express marque la ligne comme non publiée et la l
 
 ## Risques à surveiller
 
-| Risque                                 | Réponse actuelle                                                |
-| -------------------------------------- | --------------------------------------------------------------- |
-| Clé API volée                          | Rotation du secret, HTTPS obligatoire, ne jamais exposer au web |
-| Supabase contourné depuis Internet     | `X-API-Key`, pare-feu ou allowlist IP si possible               |
-| Fichier renommé en `.jpg`              | Magic bytes puis décodage Sharp                                 |
-| Image trop lourde après décompression  | `MEDIA_MAX_INPUT_PIXELS`                                        |
-| Remplissage disque                     | Taille maximale, rate limit, supervision du volume              |
-| Collision ou écrasement de fichier     | Suffixe aléatoire et écriture `wx`                              |
-| Path traversal                         | Nom public strict et résolution dans le dossier racine          |
-| Métadonnées GPS/EXIF                   | Réencodage sans copie des métadonnées                           |
-| Suppression non autorisée via HTTP/SQL | Aucune route `DELETE` et trigger PostgreSQL anti-delete         |
+| Risque                                | Réponse actuelle                                                |
+| ------------------------------------- | --------------------------------------------------------------- |
+| Clé API volée                         | Rotation du secret, HTTPS obligatoire, ne jamais exposer au web |
+| Supabase contourné depuis Internet    | `X-API-Key`, pare-feu ou allowlist IP si possible               |
+| Fichier renommé en `.jpg`             | Magic bytes puis décodage Sharp                                 |
+| Image trop lourde après décompression | `MEDIA_MAX_INPUT_PIXELS`                                        |
+| Remplissage disque                    | Taille maximale, rate limit, supervision du volume              |
+| Collision ou écrasement de fichier    | Suffixe aléatoire et écriture `wx`                              |
+| Path traversal                        | Nom public strict et résolution dans le dossier racine          |
+| Métadonnées GPS/EXIF                  | Réencodage sans copie des métadonnées                           |
+| Suppression directe SQL               | Trigger PostgreSQL anti-delete physique                         |
+| Suppression utilisateur directe       | Route `DELETE` protégée par `X-API-Key`, décision côté Supabase |
 
 ## Réponses attendues
 

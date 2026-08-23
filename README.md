@@ -30,9 +30,10 @@ authentifie uniquement le service appelant avec `X-API-Key`.
 - nom lisible normalisé avec suffixe aléatoire ;
 - stockage persistant hors du code source ;
 - métadonnées immuables dans PostgreSQL ;
+- `DELETE /api/v1/media/:id` réservé au client technique Supabase ;
 - `GET /media/:filename` public, avec ETag et cache immuable ;
 - rate limiting Redis pour l’upload ;
-- aucune route de suppression.
+- suppression logique auditée et retrait du fichier local.
 
 ## Architecture
 
@@ -153,6 +154,38 @@ Réponse `201` :
 L’extension est toujours reconstruite depuis le contenu détecté. Un fichier nommé `.jpg` contenant
 un PNG sera publié en `.png`; un contenu non JPEG/PNG sera refusé.
 
+## Contrat de suppression
+
+```http
+DELETE /api/v1/media/{id}
+X-API-Key: <secret-service>
+Content-Type: application/json
+```
+
+Corps JSON facultatif :
+
+```json
+{
+  "deletedReference": "supabase-user-or-operation-id",
+  "reason": "removed_by_admin"
+}
+```
+
+Réponse `200` :
+
+```json
+{
+  "id": "2dbdbe5b-df3b-4a91-84c8-9d1d1158b11d",
+  "filename": "photo-du-culte-a1b2c3d4e5f60708.jpg",
+  "status": "deleted",
+  "deletedAt": "2026-08-23T12:10:00.000Z"
+}
+```
+
+Supabase doit décider quel utilisateur peut déclencher cette action. Express vérifie uniquement la
+clé technique, marque la ligne comme `deleted`, retire le fichier du volume si possible et la lecture
+publique retourne ensuite `404`.
+
 ## Intégration Supabase
 
 Le document court à transmettre au développeur Supabase est [docs/INTEGRATION.md](docs/INTEGRATION.md).
@@ -179,13 +212,14 @@ npm run db:migrate
 
 `media_assets` conserve le nom public, le chemin interne, le type détecté, les dimensions, la taille,
 le hash, la référence externe, le statut et la date. Une ligne commence en `pending` puis devient
-`ready` seulement après écriture réussie. Un trigger interdit les `DELETE` SQL sur cette table.
+`ready` seulement après écriture réussie. Supabase peut ensuite demander une transition `deleted`.
+Un trigger interdit toujours les `DELETE` SQL physiques sur cette table.
 
 ## Sécurité
 
-La clé API est comparée en temps constant avant la lecture multipart et masquée dans les logs. Le
-stockage refuse les chemins non conformes et les écrasements. Les images publiques sont immuables ;
-le même nom humain reçoit toujours un suffixe unique.
+La clé API est comparée en temps constant avant les écritures et masquée dans les logs. Le stockage
+refuse les chemins non conformes et les écrasements. Les images publiques sont immuables ; le même
+nom humain reçoit toujours un suffixe unique.
 
 Une URL publique est visible par toute personne qui la connaît. Pour des images privées, il faudra
 remplacer la lecture publique par des URLs signées. Les garanties et limites sont détaillées dans
@@ -233,4 +267,4 @@ npm run docker:prod:logs
 La CI lance `npm ci`, l’audit des dépendances de production, toutes les vérifications, le build
 TypeScript, la validation des deux fichiers Compose et le build de l’image de production. Les tests
 couvrent la clé absente, JPEG/PNG réels, MIME falsifié, format interdit, dépassement de taille, nom
-hostile, lecture publique et absence de suppression.
+hostile, lecture publique et suppression privée par Supabase.

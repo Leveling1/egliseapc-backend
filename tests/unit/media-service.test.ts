@@ -6,12 +6,19 @@ import type {
   MediaRecord,
   MediaRepository,
   MediaStorage,
+  DeleteMediaMetadata,
   PendingMedia,
 } from '../../src/modules/media/media.types.js';
 
 class UnitMediaRepository implements MediaRepository {
   public createPending(media: PendingMedia): Promise<MediaRecord> {
-    return Promise.resolve({ ...media, createdAt: new Date('2026-01-01T00:00:00.000Z') });
+    return Promise.resolve({
+      ...media,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      deletedAt: null,
+      deletedReference: null,
+      deletionReason: null,
+    });
   }
 
   public markReady(): Promise<MediaRecord> {
@@ -20,6 +27,14 @@ class UnitMediaRepository implements MediaRepository {
 
   public markFailed(): Promise<void> {
     throw new Error('Non utilisé dans ce test');
+  }
+
+  public markDeleted(_id: string, _metadata: DeleteMediaMetadata): Promise<MediaRecord> {
+    throw new Error('Non utilisé dans ce test');
+  }
+
+  public findReadyById(): Promise<MediaRecord | null> {
+    return Promise.resolve(null);
   }
 
   public findReadyByPublicFilename(): Promise<MediaRecord | null> {
@@ -38,6 +53,10 @@ class UnitMediaStorage implements MediaStorage {
 
   public read(): Promise<Buffer> {
     return Promise.resolve(Buffer.alloc(0));
+  }
+
+  public remove(): Promise<void> {
+    return Promise.resolve();
   }
 }
 

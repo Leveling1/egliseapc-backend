@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, resolve, sep } from 'node:path';
 
 import { env } from '../../config/env.js';
@@ -33,5 +33,9 @@ export class LocalMediaStorage implements MediaStorage {
 
   public async read(storageKey: string): Promise<Buffer> {
     return readFile(this.resolveKey(storageKey));
+  }
+
+  public async remove(storageKey: string): Promise<void> {
+    await rm(this.resolveKey(storageKey), { force: true });
   }
 }

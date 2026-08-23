@@ -24,7 +24,7 @@ const corsOptions: CorsOptions = {
     }
     callback(new HttpError(403, 'Origine interdite', "Cette origine n'est pas autorisée."));
   },
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['DELETE', 'GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['authorization', 'content-type', 'x-request-id', 'x-api-key'],
   maxAge: 600,
 };

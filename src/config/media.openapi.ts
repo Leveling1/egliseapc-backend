@@ -89,6 +89,64 @@ export const mediaPaths = {
       },
     },
   },
+  '/api/v1/media/{id}': {
+    delete: {
+      tags: ['Media'],
+      summary: 'Supprime une image sur décision de Supabase',
+      description:
+        "Endpoint service-à-service. Supabase doit vérifier l'utilisateur et son rôle avant l'appel.",
+      operationId: 'deleteMedia',
+      security: [{ IntegrationApiKey: [] }],
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        },
+      ],
+      requestBody: {
+        required: false,
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/MediaDeleteRequest' },
+            examples: {
+              deletedBySupabase: {
+                summary: 'Audit fourni par Supabase',
+                value: {
+                  deletedReference: 'supabase-user-or-operation-id',
+                  reason: 'removed_by_admin',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        '200': {
+          description: 'Image dépubliée et fichier retiré du volume si possible.',
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/MediaDeleted' },
+              examples: {
+                deletedImage: {
+                  value: {
+                    id: '2dbdbe5b-df3b-4a91-84c8-9d1d1158b11d',
+                    filename: 'photo-du-culte-a1b2c3d4e5f60708.jpg',
+                    status: 'deleted',
+                    deletedAt: '2026-08-23T12:10:00.000Z',
+                  },
+                },
+              },
+            },
+          },
+        },
+        '400': { $ref: '#/components/responses/BadRequest' },
+        '401': { $ref: '#/components/responses/Unauthorized' },
+        '404': { $ref: '#/components/responses/NotFound' },
+      },
+    },
+  },
   '/media/{filename}': {
     get: {
       tags: ['Media'],
@@ -151,6 +209,32 @@ export const mediaSchemas = {
       width: { type: 'integer', minimum: 1 },
       height: { type: 'integer', minimum: 1 },
       createdAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  MediaDeleteRequest: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      deletedReference: {
+        type: 'string',
+        maxLength: 128,
+        description: 'Référence opaque fournie par Supabase pour audit.',
+      },
+      reason: {
+        type: 'string',
+        maxLength: 200,
+        description: 'Raison technique ou métier de la suppression.',
+      },
+    },
+  },
+  MediaDeleted: {
+    type: 'object',
+    required: ['id', 'filename', 'status', 'deletedAt'],
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      filename: { type: 'string', example: 'photo-du-culte-a1b2c3d4e5f60708.jpg' },
+      status: { type: 'string', const: 'deleted' },
+      deletedAt: { type: 'string', format: 'date-time' },
     },
   },
 } as const;

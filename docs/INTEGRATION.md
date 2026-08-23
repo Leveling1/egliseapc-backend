@@ -1,36 +1,36 @@
-# Integration du service media externe
+# Intégration du service média externe
 
-Ce document est destine au backend Supabase qui consomme l'API media comme un service externe.
-Supabase reste responsable des utilisateurs, des roles et des decisions metier. Cette API ne gere
+Ce document est destiné au backend Supabase qui consomme l'API média comme un service externe.
+Supabase reste responsable des utilisateurs, des rôles et des décisions métier. Cette API ne gère
 que la validation, le stockage et la publication d'images JPEG/PNG.
 
-## 1. Responsabilites
+## 1. Responsabilités
 
 ```text
 Client
   -> Supabase Auth + Edge Function
-  -> API media Express
-  -> PostgreSQL + volume media
+  -> API média Express
+  -> PostgreSQL + volume média
   <- JSON avec URL publique
 ```
 
-Supabase doit verifier :
+Supabase doit vérifier :
 
 - le JWT de l'utilisateur ;
-- le role ou la permission ;
-- le fait que l'action d'upload est autorisee ;
-- la conservation de l'URL retournee dans ses propres tables.
+- le rôle ou la permission ;
+- le fait que l'action d'upload est autorisée ;
+- la conservation de l'URL retournée dans ses propres tables.
 
-L'API media verifie uniquement :
+L'API média vérifie uniquement :
 
-- que l'appel vient d'un client technique autorise avec `X-API-Key` ;
+- que l'appel vient d'un client technique autorisé avec `X-API-Key` ;
 - que le fichier est une vraie image JPEG ou PNG ;
-- que le fichier est reencode avant stockage ;
-- que l'URL publique retournee pointe vers l'image conservee.
+- que le fichier est réencodé avant stockage ;
+- que l'URL publique retournée pointe vers l'image conservée.
 
-## 2. Secrets a configurer
+## 2. Secrets à configurer
 
-Generer une cle privee longue :
+Générer une clé privée longue :
 
 ```bash
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
@@ -39,7 +39,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 Sur le serveur Express, dans `.env` :
 
 ```env
-INTEGRATION_API_KEY=<meme-valeur-que-media-api-key>
+INTEGRATION_API_KEY=<même-valeur-que-media-api-key>
 MEDIA_PUBLIC_BASE_URL=https://api.example.com/media
 ```
 
@@ -47,16 +47,16 @@ Dans Supabase :
 
 ```bash
 supabase secrets set MEDIA_API_URL=https://api.example.com
-supabase secrets set MEDIA_API_KEY=<meme-valeur-que-integration-api-key>
+supabase secrets set MEDIA_API_KEY=<même-valeur-que-integration-api-key>
 ```
 
-`SUPABASE_ANON_KEY` n'est pas utilisee par Express. Elle peut servir dans l'Edge Function pour
-verifier l'utilisateur Supabase, mais elle ne doit pas proteger l'appel vers l'API media. Le secret
-serveur-a-serveur est `MEDIA_API_KEY` cote Supabase et `INTEGRATION_API_KEY` cote Express.
+`SUPABASE_ANON_KEY` n'est pas utilisée par Express. Elle peut servir dans l'Edge Function pour
+vérifier l'utilisateur Supabase, mais elle ne doit pas protéger l'appel vers l'API média. Le secret
+serveur-à-serveur est `MEDIA_API_KEY` côté Supabase et `INTEGRATION_API_KEY` côté Express.
 
 ## 3. Upload depuis Supabase
 
-Endpoint appele par l'Edge Function :
+Endpoint appelé par l'Edge Function :
 
 ```http
 POST /api/v1/media
@@ -68,11 +68,11 @@ Champs form-data :
 
 | Champ               | Requis | Description                                                              |
 | ------------------- | ------ | ------------------------------------------------------------------------ |
-| `photo`             | oui    | Fichier JPEG ou PNG. Un seul fichier par requete.                        |
-| `name`              | non    | Nom lisible souhaite. Le serveur le nettoie et ajoute un suffixe unique. |
-| `externalReference` | non    | Reference opaque Supabase, par exemple id utilisateur ou operation.      |
+| `photo`             | oui    | Fichier JPEG ou PNG. Un seul fichier par requête.                        |
+| `name`              | non    | Nom lisible souhaité. Le serveur le nettoie et ajoute un suffixe unique. |
+| `externalReference` | non    | Référence opaque Supabase, par exemple id utilisateur ou opération.      |
 
-Reponse `201 application/json` :
+Réponse `201 application/json` :
 
 ```json
 {
@@ -131,36 +131,88 @@ Deno.serve(async (request) => {
 });
 ```
 
-Le controle `permissions.includes('media:upload')` est un exemple. Utiliser la regle de role deja
-presente dans le projet Supabase.
+Le contrôle `permissions.includes('media:upload')` est un exemple. Utiliser la règle de rôle déjà
+présente dans le projet Supabase.
 
 ## 5. Lecture publique
 
-L'URL retournee dans `url` est directement exploitable dans un navigateur ou dans une balise image :
+L'URL retournée dans `url` est directement exploitable dans un navigateur ou dans une balise image :
 
 ```text
 https://api.example.com/media/photo-du-culte-a1b2c3d4e5f60708.jpg
 ```
 
 `GET /media/:filename` est public. Une URL publique n'est donc pas un secret : toute personne qui la
-possede peut voir l'image.
+possède peut voir l'image.
 
 ## 6. Suppression
 
-Aucune route `DELETE` n'est exposee par cette API.
+Supabase peut supprimer une image après avoir autorisé l'utilisateur côté Supabase.
 
-Raison : dans le besoin actuel, le service media doit conserver les fichiers et ne permettre a
-personne de supprimer via HTTP. PostgreSQL contient aussi un trigger qui refuse les `DELETE` sur
-`media_assets`.
+```http
+DELETE /api/v1/media/{id}
+X-API-Key: <MEDIA_API_KEY>
+Content-Type: application/json
+```
 
-Si le produit a besoin de "retirer" une image plus tard, la bonne evolution sera :
+Corps JSON facultatif :
 
-- Supabase decide si l'utilisateur peut retirer l'image ;
-- Supabase appelle un endpoint dedie, par exemple `PATCH /api/v1/media/:id/archive` ;
-- l'API marque l'image comme non publiee au lieu de supprimer physiquement le fichier ;
-- `GET /media/:filename` retourne ensuite `404`.
+```json
+{
+  "deletedReference": "supabase-user-or-operation-id",
+  "reason": "removed_by_admin"
+}
+```
 
-Ce endpoint n'est pas implemente pour l'instant afin de respecter la regle "personne ne supprime".
+Réponse `200 application/json` :
+
+```json
+{
+  "id": "2dbdbe5b-df3b-4a91-84c8-9d1d1158b11d",
+  "filename": "photo-du-culte-a1b2c3d4e5f60708.jpg",
+  "status": "deleted",
+  "deletedAt": "2026-08-23T12:10:00.000Z"
+}
+```
+
+Après suppression, `GET /media/:filename` retourne `404`.
+
+Important :
+
+- Supabase décide qui a le droit de supprimer.
+- Express ne connaît pas les utilisateurs, il vérifie seulement `X-API-Key`.
+- La ligne PostgreSQL n'est pas effacée physiquement : elle passe à `deleted` pour garder l'audit.
+- Le fichier est retiré du volume local si possible.
+
+Exemple Edge Function simplifiée :
+
+```ts
+Deno.serve(async (request) => {
+  const id = new URL(request.url).searchParams.get('id');
+  if (!id) return new Response('Bad Request', { status: 400 });
+
+  // Vérifier ici le JWT, l'utilisateur et le rôle autorisé à supprimer.
+
+  const mediaResponse = await fetch(`${Deno.env.get('MEDIA_API_URL')}/api/v1/media/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': Deno.env.get('MEDIA_API_KEY')!,
+    },
+    body: JSON.stringify({
+      deletedReference: 'supabase-user-or-operation-id',
+      reason: 'removed_by_admin',
+    }),
+  });
+
+  return new Response(await mediaResponse.arrayBuffer(), {
+    status: mediaResponse.status,
+    headers: {
+      'Content-Type': mediaResponse.headers.get('Content-Type') ?? 'application/json',
+    },
+  });
+});
+```
 
 ## 7. Erreurs
 
@@ -170,10 +222,11 @@ Toutes les erreurs Express utilisent `application/problem+json`.
 | --------------------------------------------- | ------ |
 | `X-API-Key` absente ou incorrecte             | `401`  |
 | Champ `photo` absent ou mauvais multipart     | `400`  |
-| MIME declare hors `image/jpeg` ou `image/png` | `415`  |
+| Corps JSON de suppression invalide            | `400`  |
+| MIME déclaré hors `image/jpeg` ou `image/png` | `415`  |
 | Magic bytes non JPEG/PNG                      | `415`  |
 | Fichier trop volumineux                       | `413`  |
-| Trop de requetes d'upload                     | `429`  |
+| Trop de requêtes d'upload                     | `429`  |
 | Image publique introuvable                    | `404`  |
 
 Exemple :
@@ -183,7 +236,7 @@ Exemple :
   "type": "about:blank",
   "title": "Image non prise en charge",
   "status": 415,
-  "detail": "Seuls les fichiers JPEG et PNG sont acceptes.",
+  "detail": "Seuls les fichiers JPEG et PNG sont acceptés.",
   "requestId": "2dbdbe5b-df3b-4a91-84c8-9d1d1158b11d"
 }
 ```
@@ -198,5 +251,5 @@ curl -X POST "$MEDIA_API_URL/api/v1/media" \
   -F "externalReference=test-supabase"
 ```
 
-Sans la cle technique, l'appel doit retourner `401`. Avec un faux JPEG contenant du texte, l'appel
+Sans la clé technique, l'appel doit retourner `401`. Avec un faux JPEG contenant du texte, l'appel
 doit retourner `415`.

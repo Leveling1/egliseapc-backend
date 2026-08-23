@@ -7,6 +7,13 @@ export const mediaUploadFieldsSchema = z.object({
   externalReference: z.string().trim().min(1).max(128).optional(),
 });
 
+export const mediaDeleteBodySchema = z.object({
+  deletedReference: z.string().trim().min(1).max(128).optional(),
+  reason: z.string().trim().min(1).max(200).optional(),
+});
+
+export const mediaIdParamSchema = z.uuid();
+
 export function createSafeDisplayName(value: string): string {
   const filename = basename(value.replaceAll('\\', '/')).replace(/\.[^.]+$/, '');
   const slug = filename

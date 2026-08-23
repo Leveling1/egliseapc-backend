@@ -5,6 +5,7 @@ import type {
   MediaRecord,
   MediaRepository,
   MediaStatus,
+  DeleteMediaMetadata,
   PendingMedia,
 } from './media.types.js';
 
@@ -22,11 +23,15 @@ interface MediaRow {
   external_reference: string | null;
   status: MediaStatus;
   created_at: Date;
+  deleted_at: Date | null;
+  deleted_reference: string | null;
+  deletion_reason: string | null;
 }
 
 const returnedColumns = `
   id, public_filename, display_name, storage_key, mime_type, extension, byte_size,
-  width, height, sha256, external_reference, status, created_at
+  width, height, sha256, external_reference, status, created_at,
+  deleted_at, deleted_reference, deletion_reason
 `;
 
 function mapRow(row: MediaRow): MediaRecord {
@@ -44,6 +49,9 @@ function mapRow(row: MediaRow): MediaRecord {
     externalReference: row.external_reference,
     status: row.status,
     createdAt: row.created_at,
+    deletedAt: row.deleted_at,
+    deletedReference: row.deleted_reference,
+    deletionReason: row.deletion_reason,
   };
 }
 
@@ -93,6 +101,33 @@ export class PostgresMediaRepository implements MediaRepository {
       "UPDATE media_assets SET status = 'failed' WHERE id = $1 AND status = 'pending'",
       [id],
     );
+  }
+
+  public async markDeleted(id: string, metadata: DeleteMediaMetadata): Promise<MediaRecord> {
+    const result = await postgres.query<MediaRow>(
+      `UPDATE media_assets
+       SET status = 'deleted',
+           deleted_at = NOW(),
+           deleted_reference = $2,
+           deletion_reason = $3
+       WHERE id = $1 AND status = 'ready'
+       RETURNING ${returnedColumns}`,
+      [id, metadata.deletedReference ?? null, metadata.deletionReason ?? null],
+    );
+
+    const row = result.rows[0];
+    if (!row) throw new Error(`Le média ${id} ne peut pas être supprimé.`);
+    return mapRow(row);
+  }
+
+  public async findReadyById(id: string): Promise<MediaRecord | null> {
+    const result = await postgres.query<MediaRow>(
+      `SELECT ${returnedColumns} FROM media_assets
+       WHERE id = $1 AND status = 'ready'`,
+      [id],
+    );
+
+    return result.rows[0] ? mapRow(result.rows[0]) : null;
   }
 
   public async findReadyByPublicFilename(publicFilename: string): Promise<MediaRecord | null> {

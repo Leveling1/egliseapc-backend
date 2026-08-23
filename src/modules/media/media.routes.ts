@@ -1,7 +1,11 @@
 import { Router } from 'express';
 
 import { requireIntegrationApiKey } from '../../shared/security/integration-api-key.middleware.js';
-import { createGetPublicMediaHandler, createUploadMediaHandler } from './media.controller.js';
+import {
+  createDeleteMediaHandler,
+  createGetPublicMediaHandler,
+  createUploadMediaHandler,
+} from './media.controller.js';
 import { createMediaUploadRateLimit } from './media-rate-limit.js';
 import type { MediaService } from './media.service.js';
 import { mediaUploadMiddleware } from './media-upload.middleware.js';
@@ -17,6 +21,7 @@ export function createMediaRouter(service: MediaService): Router {
     mediaUploadMiddleware,
     createUploadMediaHandler(service),
   );
+  router.delete('/:id', requireIntegrationApiKey, createDeleteMediaHandler(service));
 
   return router;
 }

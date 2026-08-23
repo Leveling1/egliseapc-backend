@@ -9,6 +9,7 @@ import type {
   MediaRecord,
   MediaRepository,
   MediaStorage,
+  DeleteMediaMetadata,
   PendingMedia,
 } from '../../src/modules/media/media.types.js';
 
@@ -16,7 +17,13 @@ class MemoryMediaRepository implements MediaRepository {
   public readonly records = new Map<string, MediaRecord>();
 
   public createPending(media: PendingMedia): Promise<MediaRecord> {
-    const record = { ...media, createdAt: new Date('2026-01-01T00:00:00.000Z') };
+    const record = {
+      ...media,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      deletedAt: null,
+      deletedReference: null,
+      deletionReason: null,
+    };
     this.records.set(record.id, record);
     return Promise.resolve(record);
   }
@@ -33,6 +40,25 @@ class MemoryMediaRepository implements MediaRepository {
     const record = this.records.get(id);
     if (record) this.records.set(id, { ...record, status: 'failed' });
     return Promise.resolve();
+  }
+
+  public markDeleted(id: string, metadata: DeleteMediaMetadata): Promise<MediaRecord> {
+    const record = this.records.get(id);
+    if (!record) throw new Error('Média absent');
+    const deleted = {
+      ...record,
+      status: 'deleted' as const,
+      deletedAt: new Date('2026-01-01T01:00:00.000Z'),
+      deletedReference: metadata.deletedReference ?? null,
+      deletionReason: metadata.deletionReason ?? null,
+    };
+    this.records.set(id, deleted);
+    return Promise.resolve(deleted);
+  }
+
+  public findReadyById(id: string): Promise<MediaRecord | null> {
+    const record = this.records.get(id);
+    return Promise.resolve(record?.status === 'ready' ? record : null);
   }
 
   public findReadyByPublicFilename(filename: string): Promise<MediaRecord | null> {
@@ -62,9 +88,15 @@ class MemoryMediaStorage implements MediaStorage {
     if (!data) throw new Error('Fichier absent');
     return Promise.resolve(data);
   }
+
+  public remove(storageKey: string): Promise<void> {
+    this.files.delete(storageKey);
+    return Promise.resolve();
+  }
 }
 
 interface MediaResponseBody {
+  id: string;
   filename: string;
   url: string;
   mimeType: string;
@@ -204,14 +236,46 @@ describe('API média externe', () => {
     expect(response.body).toMatchObject({ title: 'Fichier trop volumineux' });
   });
 
-  it('n’expose aucune suppression et masque les chemins invalides', async () => {
-    const [apiDelete, publicDelete, traversal] = await Promise.all([
-      request(app).delete('/api/v1/media/example.jpg').set(apiKeyHeader),
+  it('supprime une image uniquement avec la clé technique', async () => {
+    const jpeg = await sharp({
+      create: { width: 2, height: 2, channels: 3, background: '#ffffff' },
+    })
+      .jpeg()
+      .toBuffer();
+    const upload = await request(app)
+      .post('/api/v1/media')
+      .set(apiKeyHeader)
+      .field('name', 'Photo à retirer')
+      .attach('photo', jpeg, { filename: 'photo.jpg', contentType: 'image/jpeg' });
+    const body = upload.body as unknown as MediaResponseBody;
+
+    const unauthorized = await request(app).delete(`/api/v1/media/${body.id}`);
+    expect(unauthorized.status).toBe(401);
+
+    const deleted = await request(app)
+      .delete(`/api/v1/media/${body.id}`)
+      .set(apiKeyHeader)
+      .send({ deletedReference: 'supabase-admin-id', reason: 'removed_by_admin' });
+
+    expect(deleted.status).toBe(200);
+    expect(deleted.body).toMatchObject({
+      id: body.id,
+      filename: body.filename,
+      status: 'deleted',
+      deletedAt: '2026-01-01T01:00:00.000Z',
+    });
+    expect(storage.files.size).toBe(0);
+
+    const publicResponse = await request(app).get(`/media/${body.filename}`);
+    expect(publicResponse.status).toBe(404);
+  });
+
+  it('masque les chemins invalides', async () => {
+    const [publicDelete, traversal] = await Promise.all([
       request(app).delete('/media/example.jpg'),
       request(app).get('/media/not-a-valid-file.exe'),
     ]);
 
-    expect(apiDelete.status).toBe(404);
     expect(publicDelete.status).toBe(404);
     expect(traversal.status).toBe(404);
   });
