@@ -10,9 +10,7 @@ x-api-environment: &api-environment
 
 services:
   migrate:
-    build:
-      context: .
-      target: production
+    image: egliseapc-backend:prod
     env_file: .env
     environment: *api-environment
     command: npm run db:migrate:prod
@@ -23,6 +21,7 @@ services:
     restart: 'no'
 
   api:
+    image: egliseapc-backend:prod
     build:
       context: .
       target: production

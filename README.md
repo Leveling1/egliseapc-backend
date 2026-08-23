@@ -84,7 +84,7 @@ egliseapc-backend/
 │   │       ├── health.routes.ts
 │   │       ├── health.controller.ts
 │   │       └── health.service.ts
-│   ├── infrastructure/
+│   ├── infra/
 │   │   ├── cache/redis.ts              # Client Redis partagé
 │   │   ├── database/postgres.ts        # Pool PostgreSQL partagé
 │   │   ├── database/migrate.ts         # Runner de migrations SQL
@@ -99,7 +99,6 @@ egliseapc-backend/
 ├── database/
 │   ├── migrations/                     # SQL versionné, immuable après application
 │   └── seeds/                          # Futures données locales non sensibles
-├── docs/ARCHITECTURE.md                # Règles de dépendances détaillées
 ├── tests/                              # Tests HTTP et futurs tests par module
 ├── compose.dev.yaml                    # Développement : hot reload et ports locaux
 ├── compose.prod.yaml                   # Production : réseau privé et migration préalable
@@ -120,7 +119,7 @@ route → controller → service → repository SQL / adaptateur externe
 - le repository exécute exclusivement des requêtes SQL paramétrées ;
 - le schema Zod valide les données à la frontière.
 
-Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) et [agent.mmd](agent.mmd) pour les règles complètes.
+Voir [agent.mmd](agent.mmd) pour le diagramme et les frontières architecturales.
 
 ## Démarrage en développement
 
@@ -130,10 +129,16 @@ Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) et [agent.mmd](agent.mmd) pour
 Copy-Item .env.example .env
 # Modifier les mots de passe dans .env
 npm run docker:dev
+npm run docker:dev:logs
 ```
 
 `compose.dev.yaml` lit `.env`, monte le code pour le hot reload et expose seulement sur
 `127.0.0.1` : API `3000`, PostgreSQL `5432`, Redis `6379`.
+
+`docker:dev` construit les images puis démarre les conteneurs en arrière-plan. `docker:dev:logs`
+suit les journaux ; `Ctrl+C` quitte seulement leur affichage, sans arrêter les conteneurs. Pour
+l'API seule, utiliser `npm run docker:dev:logs:api`. `npm run docker:dev:ps` affiche aussi les
+services arrêtés.
 
 ### Option B — API locale, dépendances dans Docker
 
@@ -165,6 +170,7 @@ commité ni copié depuis le dépôt.
 ```bash
 # Sur le serveur, après création sécurisée de .env
 npm run docker:prod
+npm run docker:prod:logs
 ```
 
 `compose.prod.yaml` :
@@ -175,6 +181,9 @@ npm run docker:prod
 - lance l'API avec un utilisateur Linux non-root ;
 - conserve PostgreSQL, Redis et les futurs médias dans des volumes dédiés ;
 - redémarre les services persistants et vérifie leur santé.
+
+Les commandes `docker:prod:logs:api` et `docker:prod:ps` ciblent respectivement les logs de l'API
+et l'état de tous les conteneurs.
 
 L'API écoute par défaut sur `127.0.0.1:3000`, prête à être placée derrière un reverse proxy TLS.
 Définir `TRUST_PROXY=1` uniquement s'il existe exactement un proxy de confiance. Mettre

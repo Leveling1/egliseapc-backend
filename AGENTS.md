@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-`src/app.ts` compose l'application HTTP sans ouvrir de port ; `src/server.ts` connecte l'infrastructure et gère son cycle de vie. Les fonctionnalités vivent sous `src/modules/<domaine>` et suivent `routes → controller → service → repository/adaptateur`. Les adaptateurs PostgreSQL et Redis restent dans `src/infrastructure`, tandis que les préoccupations transversales sont sous `src/shared`. Les migrations SQL ordonnées résident dans `database/migrations`. Toute nouvelle route publique doit être décrite dans OpenAPI. `agent.mmd` et `docs/ARCHITECTURE.md` fixent les frontières.
+`src/app.ts` compose l'application HTTP sans ouvrir de port ; `src/server.ts` connecte l'infrastructure et gère son cycle de vie. Les fonctionnalités vivent sous `src/modules/<domaine>` et suivent `routes → controller → service → repository/adaptateur`. Les adaptateurs PostgreSQL et Redis restent dans `src/infra`, tandis que les préoccupations transversales sont sous `src/shared`. Les migrations SQL ordonnées résident dans `database/migrations`. Toute nouvelle route publique doit être décrite dans OpenAPI. `agent.mmd` fixe les frontières architecturales.
 
 ## Build, Test, and Development Commands
 
@@ -11,8 +11,8 @@
 - `npm test` : lance tous les tests Vitest ; `npx vitest run tests/health.test.ts` cible un fichier.
 - `npm run check` : enchaîne types, lint, format et tests.
 - `npm run db:migrate` : applique les migrations SQL pures en attente.
-- `npm run docker:dev` / `npm run docker:dev:down` : gère la pile de développement.
-- `npm run docker:prod` / `npm run docker:prod:down` : gère la pile de production.
+- `npm run docker:dev` construit et démarre la pile en arrière-plan ; `docker:dev:logs` affiche les logs et `docker:dev:down` l'arrête.
+- `npm run docker:prod` et les variantes `docker:prod:*` appliquent le même cycle à la production.
 
 ## Coding Style & Naming Conventions
 

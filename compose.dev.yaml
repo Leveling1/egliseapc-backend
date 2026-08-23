@@ -10,12 +10,13 @@ x-api-environment: &api-environment
 
 services:
   migrate:
-    build:
-      context: .
-      target: development
+    image: egliseapc-backend:dev
     env_file: .env
     environment: *api-environment
     command: npm run db:migrate
+    volumes:
+      - .:/app
+      - node-modules:/app/node_modules
     depends_on:
       postgres:
         condition: service_healthy
@@ -23,6 +24,7 @@ services:
     restart: 'no'
 
   api:
+    image: egliseapc-backend:dev
     build:
       context: .
       target: development
