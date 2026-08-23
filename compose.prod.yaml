@@ -1,0 +1,77 @@
+name: egliseapc-prod
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  PORT: 3000
+  DATABASE_HOST: postgres
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  MEDIA_STORAGE_PATH: /data/media
+
+services:
+  migrate:
+    build:
+      context: .
+      target: production
+    env_file: .env
+    environment: *api-environment
+    command: npm run db:migrate:prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend]
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      target: production
+    restart: unless-stopped
+    env_file: .env
+    environment: *api-environment
+    ports:
+      - '${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-3000}:3000'
+    volumes:
+      - media-data:/data/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks: [backend]
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    env_file: .env
+    command: ['sh', '-c', 'exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli --no-auth-warning -a "$${REDIS_PASSWORD}" ping | grep PONG']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+volumes:
+  postgres-data:
+  redis-data:
+  media-data:
+
+networks:
+  backend:
+    internal: true

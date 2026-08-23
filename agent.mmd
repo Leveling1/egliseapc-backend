@@ -1,0 +1,29 @@
+flowchart TB
+  Client[Client authentifié] -->|HTTPS| HTTP[Couche HTTP Express]
+  HTTP --> Guards[Helmet · CORS · rate limit · validation]
+  Guards --> Router[Routeur versionné /api/v1]
+
+  subgraph Monolith[Monolithe modulaire]
+    Router --> Health[Module Health]
+    Router -. prochaine étape .-> Auth[Module Auth]
+    Router -. prochaine étape .-> Media[Module Media]
+
+    Auth --> AuthController[Controller]
+    AuthController --> AuthService[Service métier]
+    AuthService --> AuthRepository[Repository SQL]
+
+    Media --> MediaController[Controller]
+    MediaController --> MediaService[Service métier]
+    MediaService --> MediaRepository[Repository SQL]
+    MediaService --> StorageAdapter[Adaptateur stockage privé]
+  end
+
+  AuthRepository --> PG[(PostgreSQL)]
+  MediaRepository --> PG
+  AuthService --> Redis[(Redis)]
+  Health --> PG
+  Health --> Redis
+  StorageAdapter --> Volume[(Volume média / objet immuable)]
+
+  MediaService --- Policy[JPEG/PNG · magic bytes · réencodage · aucun DELETE]
+

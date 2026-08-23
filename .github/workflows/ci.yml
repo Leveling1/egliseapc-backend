@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      - name: Validate Docker Compose files
+        run: |
+          cp .env.example .env
+          docker compose -f compose.dev.yaml config --quiet
+          docker compose -f compose.prod.yaml config --quiet
+      - run: docker build --target production .
